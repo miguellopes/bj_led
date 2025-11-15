@@ -238,23 +238,35 @@ class BJLEDInstance:
     def effect(self):
         return self._effect
     
-    @property
-    def color_mode(self):
-        return self._color_mode
+    #@property
+    #def color_mode(self):
+    #    return self._color_mode
 
     @retry_bluetooth_connection_error
-    async def set_rgb_color(self, rgb: Tuple[int, int, int], brightness: int | None = None):
+    async def set_rgb_color(self, rgb: Tuple[int, int, int] | None, brightness: int | None = None):
+        if rgb is None:
+            # Use last known colour, or default to white
+            rgb = self._rgb_color or (255, 255, 255)
+
+        # Store current colour
         self._rgb_color = rgb
+
+        # Determine brightness (0-255)
         if brightness is None:
             if self._brightness is None:
-                self._brightness = 255
+                brightness = 255
+                self._brightness = brightness
             else:
                 brightness = self._brightness
+        else:
+            self._brightness = brightness
+
         brightness_percent = int(brightness * 100 / 255)
-        # Now adjust the RBG values to match the brightness
+        # Now adjust the RGB values to match the brightness
         red = int(rgb[0] * brightness_percent / 100)
         green = int(rgb[1] * brightness_percent / 100)
         blue = int(rgb[2] * brightness_percent / 100)
+
         # RGB packet
         rgb_packet = bytearray.fromhex("69 96 05 02")
         rgb_packet.append(red)
@@ -263,11 +275,14 @@ class BJLEDInstance:
         await self._write(rgb_packet)
 
     async def set_brightness_local(self, value: int):
-        # 0 - 255, should convert automatically with the hex calls
-        # call color temp or rgb functions to update
+        # 0 - 255 from Home Assistant
         self._brightness = value
-        await self.set_rgb_color(self._rgb_color, value)
 
+        # If we don't yet have a stored colour (e.g. after restart), default to white
+        rgb = self._rgb_color or (255, 255, 255)
+        await self.set_rgb_color(rgb, value)
+
+        
     @retry_bluetooth_connection_error
     async def turn_on(self):
         await self._write(self._turn_on_cmd)
