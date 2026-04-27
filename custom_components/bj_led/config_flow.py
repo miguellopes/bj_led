@@ -45,7 +45,7 @@ class DeviceData(BluetoothData):
     def _start_update(self, service_info: BluetoothServiceInfo) -> None:
         """Update from BLE advertisement data."""
         LOGGER.debug("Parsing BLE advertisement data: %s", service_info)
-        
+
 class BJLEDFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
@@ -81,7 +81,7 @@ class BJLEDFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         LOGGER.debug("Discovered bluetooth devices, step bluetooth confirm, : %s", user_input)
         self._set_confirm_only()
         return await self.async_step_user()
-    
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -115,7 +115,7 @@ class BJLEDFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             device = DeviceData(discovery_info)
             if device.supported():
                 self._discovered_devices.append(device)
-        
+
         if not self._discovered_devices:
             return await self.async_step_manual()
 
@@ -136,7 +136,7 @@ class BJLEDFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 if user_input["flicker"]:
                     return self.async_create_entry(title=self.name, data={CONF_MAC: self.mac, "name": self.name})
                 return self.async_abort(reason="cannot_validate")
-            
+
             if "retry" in user_input and not user_input["retry"]:
                 return self.async_abort(reason="cannot_connect")
 
@@ -149,7 +149,7 @@ class BJLEDFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                         vol.Required("retry"): bool
                     }
                 ), errors={"base": "connect"})
-        
+
         return self.async_show_form(
             step_id="validate", data_schema=vol.Schema(
                 {
@@ -158,7 +158,7 @@ class BJLEDFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             ), errors={})
 
     async def async_step_manual(self, user_input: "dict[str, Any] | None" = None):
-        if user_input is not None:            
+        if user_input is not None:
             self.mac = user_input[CONF_MAC]
             self.name = user_input["name"]
             await self.async_set_unique_id(format_mac(self.mac))
@@ -192,24 +192,21 @@ class BJLEDFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(entry: config_entries.ConfigEntry):
-        return OptionsFlowHandler(entry)
+        return OptionsFlowHandler()
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
 
-    def __init__(self, config_entry):
-        """Initialize options flow."""
-        self.config_entry = config_entry
 
     async def async_step_init(self, _user_input=None):
         """Manage the options."""
         return await self.async_step_user()
-    
+
     async def async_step_user(self, user_input=None):
         """Handle a flow initialized by the user."""
         errors = {}
         options = self.config_entry.options or {CONF_RESET: False,CONF_DELAY: 120}
         if user_input is not None:
-            return self.async_create_entry(title="", data={CONF_RESET: user_input[CONF_RESET], CONF_DELAY: user_input[CONF_DELAY]})
+            return self.async_create_entry(title="", data={**options, **user_input})
 
         return self.async_show_form(
             step_id="user",
