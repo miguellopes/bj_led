@@ -1,46 +1,47 @@
 {
-    "config": {
-        "step": {
-            "user": {
-                "data": {
-                    "mac": "Device:",
-                    "name": "Name"
-                },
-                "title": "Choose a device."
-            },
-            "validate": {
-                "data": {
-                    "retry": "Retry validate connection?",
-                    "flicker": "Did the light blink?"
-                },
-                "title": "Validate connection"
-            },
-            "manual": {
-                "data": {
-                    "mac": "BJ_LED device:",
-                    "name": "Name"
-                },
-                "title": "Enter bluetooth MAC address"
-            }
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "mac": "Device",
+          "name": "Name"
         },
-        "error": {
-            "connect": "Unable to connect"
+        "title": "Choose a device"
+      },
+      "validate": {
+        "data": {
+          "retry": "Retry validate connection?",
+          "flicker": "Did the light blink?"
         },
-        "abort": {
-            "cannot_validate": "Unable to validate",
-            "cannot_connect": "Unable to connect",
-            "already_configured" : "Device already configured"
-        }
+        "title": "Validate connection"
+      },
+      "manual": {
+        "data": {
+          "mac": "BJ_LED device",
+          "name": "Name"
+        },
+        "title": "Enter Bluetooth MAC address"
+      }
     },
-    "options": {
-        "step": {
-            "user": {
-                "data": {
-                    "reset": "Reset color when led turn on",
-                    "delay": "Disconnect delay (0 equal never disconnect)"
-                }
-            }
-        }
+    "error": {
+      "connect": "Unable to connect"
     },
-    "title": "BJ_LED"
+    "abort": {
+      "cannot_validate": "Unable to validate",
+      "cannot_connect": "Unable to connect",
+      "already_configured": "Device already configured",
+      "not_supported": "This Bluetooth device is not supported"
+    }
+  },
+  "options": {
+    "step": {
+      "user": {
+        "data": {
+          "reset": "Reset color when LED turns on",
+          "delay": "Disconnect delay (0 means never disconnect)"
+        }
+      }
+    }
+  },
+  "title": "BJ_LED"
 }

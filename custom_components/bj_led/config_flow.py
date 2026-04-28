@@ -1,186 +1,191 @@
+from __future__ import annotations
+
 import asyncio
-from .bjled import BJLEDInstance
+import logging
 from typing import Any
 
-from bluetooth_data_tools import human_readable_name
-from homeassistant import config_entries
-from homeassistant.const import CONF_MAC
 import voluptuous as vol
-from homeassistant.helpers.device_registry import format_mac
-from homeassistant.data_entry_flow import FlowResult
-from homeassistant.core import callback
+from bluetooth_data_tools import human_readable_name
+from home_assistant_bluetooth import BluetoothServiceInfo
+
+from homeassistant import config_entries
 from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_discovered_service_info,
 )
-from bluetooth_sensor_state_data import BluetoothData
-from home_assistant_bluetooth import BluetoothServiceInfo
+from homeassistant.const import CONF_MAC
+from homeassistant.core import callback
+from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers.device_registry import format_mac
 
-from .const import DOMAIN, CONF_RESET, CONF_DELAY
-import logging
+from .bjled import BJLEDInstance
+from .const import CONF_DELAY, CONF_RESET, DOMAIN
 
 LOGGER = logging.getLogger(__name__)
-DATA_SCHEMA = vol.Schema({("host"): str})
 
-class DeviceData(BluetoothData):
-    def __init__(self, discovery_info) -> None:
+
+class DeviceData:
+    """Container for discovered BLE device information."""
+
+    def __init__(self, discovery_info: BluetoothServiceInfoBleak) -> None:
         self._discovery = discovery_info
-        #LOGGER.debug("Discovered bluetooth devices, DeviceData, : %s , %s", self._discovery.address, self._discovery.name)
 
-    def supported(self):
-        return self._discovery.name.lower().startswith("bj_led")
+    def supported(self) -> bool:
+        """Return if this discovery looks like a BJ LED device."""
+        local_name = (self._discovery.name or "").strip()
+        if not local_name:
+            return False
+        return local_name.lower().startswith("bj_led")
 
-    def address(self):
+    def address(self) -> str:
         return self._discovery.address
 
-    def get_device_name(self):
+    def get_device_name(self) -> str:
         return human_readable_name(None, self._discovery.name, self._discovery.address)
 
-    def name(self):
+    def name(self) -> str:
         return human_readable_name(None, self._discovery.name, self._discovery.address)
-
-    def rssi(self):
-        return self._discovery.rssi
 
     def _start_update(self, service_info: BluetoothServiceInfo) -> None:
         """Update from BLE advertisement data."""
         LOGGER.debug("Parsing BLE advertisement data: %s", service_info)
 
+
 class BJLEDFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle BJ LED config flow."""
+
     VERSION = 1
-    CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
 
     def __init__(self) -> None:
-        self.mac = None
-        self._device = None
-        self._instance = None
-        self.name = None
-        self._discovery_info: BluetoothServiceInfoBleak | None = None
-        self._discovered_device: DeviceData | None = None
-        self._discovered_devices = []
+        self.mac: str | None = None
+        self.name: str | None = None
+        self._instance: BJLEDInstance | None = None
+        self._discovered_devices: list[DeviceData] = []
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
     ) -> FlowResult:
-        """Handle the bluetooth discovery step."""
-        #LOGGER.debug("Discovered bluetooth devices, step bluetooth, : %s , %s", discovery_info.address, discovery_info.name)
-        await self.async_set_unique_id(discovery_info.address)
+        """Handle bluetooth discovery."""
+        await self.async_set_unique_id(format_mac(discovery_info.address))
         self._abort_if_unique_id_configured()
+
         device = DeviceData(discovery_info)
         self.context["title_placeholders"] = {"name": device.name()}
-        if device.supported():
-            self._discovered_devices.append(device)
-            return await self.async_step_bluetooth_confirm()
-        else:
+
+        if not device.supported():
             return self.async_abort(reason="not_supported")
+
+        self._discovered_devices.append(device)
+        return await self.async_step_bluetooth_confirm()
 
     async def async_step_bluetooth_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Confirm discovery."""
-        LOGGER.debug("Discovered bluetooth devices, step bluetooth confirm, : %s", user_input)
+        """Confirm auto-discovered device."""
         self._set_confirm_only()
-        return await self.async_step_user()
+        return await self.async_step_user(user_input)
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle the user step to pick discovered device."""
-        LOGGER.debug(f"step_user context: {self.context}")
+        """Handle picking a discovered device."""
         if user_input is not None:
             self.mac = user_input[CONF_MAC]
-            LOGGER.debug(f"MAC address: {self.mac}")
-            if "title_placeholders" in self.context.keys() :
-                self.name = self.context["title_placeholders"]["name"]
-            if 'source' in self.context.keys() and self.context['source'] == 'user':
-                LOGGER.debug(f"User context.  discovered devices: {self._discovered_devices}")
-                for each in self._discovered_devices:
-                  LOGGER.debug(f"Address: {each.address()}")
-                  if each.address() == self.mac:
-                    self.name = each.get_device_name()
-            if self.name is None: self.name = "BJ_LEDx"
-            await self.async_set_unique_id(self.mac, raise_on_progress=False)
+            self.name = self.context.get("title_placeholders", {}).get("name")
+
+            if self.context.get("source") == config_entries.SOURCE_USER:
+                for device in self._discovered_devices:
+                    if device.address() == self.mac:
+                        self.name = device.get_device_name()
+                        break
+
+            if self.name is None:
+                self.name = f"BJ_LED {self.mac}"
+
+            await self.async_set_unique_id(format_mac(self.mac), raise_on_progress=False)
             self._abort_if_unique_id_configured()
             return await self.async_step_validate()
 
-        current_addresses = self._async_current_ids()
-        for discovery_info in async_discovered_service_info(self.hass):
-            self.mac = discovery_info.address
-            if self.mac in current_addresses:
-                LOGGER.debug("Device %s in current_addresses", (self.mac))
-                continue
-            if (device for device in self._discovered_devices if device.address == self.mac) == ([]):
-                LOGGER.debug("Device %s in discovered_devices", (device))
-                continue
-            device = DeviceData(discovery_info)
-            if device.supported():
-                self._discovered_devices.append(device)
+        await self._async_collect_discovered_devices()
 
         if not self._discovered_devices:
             return await self.async_step_manual()
 
-        LOGGER.debug("Discovered supported devices: %s - %s", self._discovered_devices[0].name(), self._discovered_devices[0].address())
-
-        mac_dict = { dev.address(): dev.name() for dev in self._discovered_devices }
+        mac_dict = {device.address(): device.name() for device in self._discovered_devices}
         return self.async_show_form(
-            step_id="user", data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_MAC): vol.In(mac_dict),
-                }
-            ),
-            errors={})
+            step_id="user",
+            data_schema=vol.Schema({vol.Required(CONF_MAC): vol.In(mac_dict)}),
+            errors={},
+        )
 
-    async def async_step_validate(self, user_input: "dict[str, Any] | None" = None):
+    async def _async_collect_discovered_devices(self) -> None:
+        """Refresh discovered devices list with currently known bluetooth devices."""
+        current_addresses = self._async_current_ids()
+        known = {device.address() for device in self._discovered_devices}
+
+        for discovery_info in async_discovered_service_info(self.hass):
+            formatted_address = format_mac(discovery_info.address)
+            if formatted_address in current_addresses or discovery_info.address in known:
+                continue
+
+            device = DeviceData(discovery_info)
+            if device.supported():
+                self._discovered_devices.append(device)
+                known.add(device.address())
+
+    async def async_step_validate(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Blink the strip so the user can validate the selected device."""
         if user_input is not None:
-            if "flicker" in user_input:
-                if user_input["flicker"]:
-                    return self.async_create_entry(title=self.name, data={CONF_MAC: self.mac, "name": self.name})
-                return self.async_abort(reason="cannot_validate")
-
-            if "retry" in user_input and not user_input["retry"]:
-                return self.async_abort(reason="cannot_connect")
+            if user_input["flicker"]:
+                return self.async_create_entry(
+                    title=self.name,
+                    data={CONF_MAC: self.mac, "name": self.name},
+                )
+            return self.async_abort(reason="cannot_validate")
 
         error = await self.toggle_light()
         if error:
             return self.async_show_form(
-                step_id="manual",
-                data_schema=YOUR_EXISTING_SCHEMA_HERE,
-                errors={"base": error},
+                step_id="validate",
+                data_schema=vol.Schema({vol.Required("retry", default=True): bool}),
+                errors={"base": "connect"},
             )
 
-        if error:
-            return self.async_show_form(
-                step_id="validate", data_schema=vol.Schema(
-                    {
-                        vol.Required("retry"): bool
-                    }
-                ), errors={"base": "connect"})
-
         return self.async_show_form(
-            step_id="validate", data_schema=vol.Schema(
-                {
-                    vol.Required("flicker"): bool
-                }
-            ), errors={})
+            step_id="validate",
+            data_schema=vol.Schema({vol.Required("flicker"): bool}),
+            errors={},
+        )
 
-    async def async_step_manual(self, user_input: "dict[str, Any] | None" = None):
+    async def async_step_manual(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manual fallback when a device cannot be auto-discovered by name."""
         if user_input is not None:
             self.mac = user_input[CONF_MAC]
             self.name = user_input["name"]
             await self.async_set_unique_id(format_mac(self.mac))
+            self._abort_if_unique_id_configured()
             return await self.async_step_validate()
 
         return self.async_show_form(
-            step_id="manual", data_schema=vol.Schema(
+            step_id="manual",
+            data_schema=vol.Schema(
                 {
                     vol.Required(CONF_MAC): str,
-                    vol.Required("name"): str
+                    vol.Required("name", default="BJ_LED"): str,
                 }
-            ), errors={})
+            ),
+            errors={},
+        )
 
-    async def toggle_light(self):
+    async def toggle_light(self) -> Exception | None:
+        """Try toggling light to validate connectivity."""
         if not self._instance:
             self._instance = BJLEDInstance(self.mac, False, 120, self.hass)
+
         try:
             await self._instance.update()
             await self._instance.turn_on()
@@ -190,27 +195,32 @@ class BJLEDFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             await self._instance.turn_on()
             await asyncio.sleep(1)
             await self._instance.turn_off()
-        except (Exception) as error:
-            return error
+        except Exception as err:  # noqa: BLE001
+            return err
         finally:
             await self._instance.stop()
 
+        return None
+
     @staticmethod
     @callback
-    def async_get_options_flow(entry: config_entries.ConfigEntry):
+    def async_get_options_flow(_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
         return OptionsFlowHandler()
 
+
 class OptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle options flow."""
 
-
-    async def async_step_init(self, _user_input=None):
-        """Manage the options."""
+    async def async_step_init(self, _user_input: dict[str, Any] | None = None) -> FlowResult:
         return await self.async_step_user()
 
-    async def async_step_user(self, user_input=None):
-        """Handle a flow initialized by the user."""
-        errors = {}
-        options = self.config_entry.options or {CONF_RESET: False,CONF_DELAY: 120}
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        options = self.config_entry.options or {
+            CONF_RESET: False,
+            CONF_DELAY: 120,
+        }
         if user_input is not None:
             return self.async_create_entry(title="", data={**options, **user_input})
 
@@ -218,7 +228,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(CONF_DELAY, default=options.get(CONF_DELAY)): int
+                    vol.Optional(
+                        CONF_DELAY,
+                        default=options.get(CONF_DELAY, 120),
+                    ): int
                 }
-            ), errors=errors
+            ),
+            errors={},
         )
