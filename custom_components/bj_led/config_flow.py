@@ -141,6 +141,12 @@ class BJLEDFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_abort(reason="cannot_connect")
 
         error = await self.toggle_light()
+        if error:
+            return self.async_show_form(
+                step_id="manual",
+                data_schema=YOUR_EXISTING_SCHEMA_HERE,
+                errors={"base": error},
+            )
 
         if error:
             return self.async_show_form(
