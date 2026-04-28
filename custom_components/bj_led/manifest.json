@@ -2,11 +2,11 @@
   "domain": "bj_led",
   "name": "BJ_LED BLE",
   "bluetooth": [
-      { "local_name": "BJ_LED" }
+      { "local_name": "BJ_LED_M" }
     ],
   "codeowners": ["@8none1"],
   "config_flow": true,
-  "dependencies": ["bluetooth"],
+  "dependencies": ["bluetooth_adapters"],
   "documentation": "https://github.com/8none1/bj_led",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/8none1/bj_led/issues",
