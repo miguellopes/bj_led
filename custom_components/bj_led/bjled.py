@@ -74,7 +74,7 @@ EFFECT_MAP = {
 EFFECT_LIST = sorted(EFFECT_MAP)
 EFFECT_ID_NAME = {v: k for k, v in EFFECT_MAP.items()}
 
-NAME_ARRAY = ["BJ_LED"]
+NAME_ARRAY = ["BJ_LED_M"]
 WRITE_CHARACTERISTIC_UUIDS = ["0000ee01-0000-1000-8000-00805f9b34fb"]
 TURN_ON_CMD  = [bytearray.fromhex("69 96 02 01 01")]
 TURN_OFF_CMD = [bytearray.fromhex("69 96 02 01 00")]
@@ -187,11 +187,21 @@ class BJLEDInstance:
     def _detect_model(self):
         x = 0
         for name in NAME_ARRAY:
-            if self._device.name.lower().startswith(name.lower()):
+            if self._device.name or "").lower().startswith(name.lower()):
                 self._turn_on_cmd = TURN_ON_CMD[x]
                 self._turn_off_cmd = TURN_OFF_CMD[x]
                 return x
             x = x + 1
+        LOGGER.warning(
+            "Could not detect BJ LED model. Device address=%s, name=%r",
+            self._device.address,
+            self._device.name,
+        )
+
+        raise ConfigEntryNotReady(
+            f"Could not detect BJ LED model for {self._device.address}; "
+            "the device did not advertise a Bluetooth name."
+        )
 
     async def _write(self, data: bytearray):
         """Send command to device and read response."""
