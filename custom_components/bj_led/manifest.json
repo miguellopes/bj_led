@@ -2,15 +2,23 @@
   "domain": "bj_led",
   "name": "BJ_LED BLE",
   "bluetooth": [
-      { "local_name": "BJ_LED_M" }
-    ],
-  "codeowners": ["@8none1"],
+    {
+      "local_name": "BJ_LED*"
+    }
+  ],
+  "codeowners": [
+    "@8none1"
+  ],
   "config_flow": true,
-  "dependencies": ["bluetooth_adapters"],
+  "dependencies": [
+    "bluetooth"
+  ],
   "documentation": "https://github.com/8none1/bj_led",
+  "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/8none1/bj_led/issues",
-  "requirements": ["bleak-retry-connector>=1.17.1","bleak>=0.17.0"],
-  "version": "0.0.1",
-  "integration_type": "device"
+  "requirements": [
+    "bleak-retry-connector>=3.5.0"
+  ],
+  "version": "0.1.0"
 }
